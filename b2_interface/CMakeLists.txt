@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(b2_msgs)
+project(b2_interface)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -10,9 +10,9 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/Status.msg"
-  "msg/ControlCommand.msg"
-  "msg/ControlFeedback.msg"
+  "msg/B2BatteryState.msg"
+  "msg/B2MotionCommand.msg"
+  "msg/B2Status.msg"
   DEPENDENCIES std_msgs
 )
 

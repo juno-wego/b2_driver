@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(ament_cmake REQUIRED)
+find_package(b2_interface REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -21,6 +22,7 @@ find_package(unitree_go REQUIRED)
 
 add_executable(b2_cmd_vel_bridge src/b2_cmd_vel_bridge.cpp)
 ament_target_dependencies(b2_cmd_vel_bridge
+  b2_interface
   geometry_msgs
   rclcpp
   std_srvs
@@ -29,11 +31,14 @@ ament_target_dependencies(b2_cmd_vel_bridge
 
 add_executable(b2_state_bridge src/b2_state_bridge.cpp)
 ament_target_dependencies(b2_state_bridge
+  b2_interface
   nav_msgs
   rclcpp
   sensor_msgs
   std_msgs
+  std_srvs
   tf2_ros
+  unitree_api
   unitree_go
 )
 
@@ -43,8 +48,14 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+install(PROGRAMS
+  scripts/set_unitree_static_ip.sh
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(DIRECTORY
   launch
+  config
   DESTINATION share/${PROJECT_NAME}
 )
 

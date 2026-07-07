@@ -1,11 +1,13 @@
 #include <algorithm>
+#include <cctype>
 #include <cmath>
-#include <sstream>
+#include <functional>
 #include <string>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
+#include "b2_interface/msg/b2_motion_command.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/trigger.hpp"
@@ -29,6 +31,14 @@ double apply_deadband(double value, double deadband)
 {
   return std::abs(value) < std::abs(deadband) ? 0.0 : value;
 }
+
+std::string normalize_command(std::string command)
+{
+  std::transform(
+    command.begin(), command.end(), command.begin(),
+    [](unsigned char c) {return static_cast<char>(std::tolower(c));});
+  return command;
+}
 }  // namespace
 
 class B2CmdVelBridge : public rclcpp::Node
@@ -37,7 +47,9 @@ public:
   B2CmdVelBridge()
   : Node("b2_cmd_vel_bridge")
   {
-    cmd_vel_topic_ = declare_parameter<std::string>("cmd_vel_topic", "cmd_vel");
+    cmd_vel_topic_ = declare_parameter<std::string>("cmd_vel_topic", "/cmd_vel");
+    motion_command_topic_ =
+      declare_parameter<std::string>("motion_command_topic", "/b2/motion_command");
     request_topic_ = declare_parameter<std::string>("request_topic", "/api/sport/request");
     max_linear_x_ = declare_parameter<double>("max_linear_x", 0.8);
     max_linear_y_ = declare_parameter<double>("max_linear_y", 0.4);
@@ -56,6 +68,9 @@ public:
         last_cmd_time_ = now();
         have_cmd_ = true;
       });
+    motion_cmd_sub_ = create_subscription<b2_interface::msg::B2MotionCommand>(
+      motion_command_topic_, rclcpp::QoS(10),
+      std::bind(&B2CmdVelBridge::on_motion_command, this, std::placeholders::_1));
 
     make_service("balance_stand", kApiBalanceStand);
     make_service("recovery_stand", kApiRecoveryStand);
@@ -77,8 +92,8 @@ public:
     }
 
     RCLCPP_INFO(
-      get_logger(), "Bridging %s to %s with B2 Sport Move API.",
-      cmd_vel_topic_.c_str(), request_topic_.c_str());
+      get_logger(), "Bridging cmd_vel=%s and motion_command=%s to %s.",
+      cmd_vel_topic_.c_str(), motion_command_topic_.c_str(), request_topic_.c_str());
   }
 
 private:
@@ -95,13 +110,6 @@ private:
       }));
   }
 
-  void publish_simple_request(int32_t api_id)
-  {
-    unitree_api::msg::Request request;
-    request.header.identity.api_id = api_id;
-    request_pub_->publish(request);
-  }
-
   void publish_move(double vx, double vy, double vyaw)
   {
     nlohmann::json parameter;
@@ -115,7 +123,8 @@ private:
     request_pub_->publish(request);
   }
 
-  void publish_motion_request(int32_t api_id, const nlohmann::json & payload = nlohmann::json::object())
+  void publish_motion_request(
+    int32_t api_id, const nlohmann::json & payload = nlohmann::json::object())
   {
     unitree_api::msg::Request request;
     request.header.identity.api_id = api_id;
@@ -123,6 +132,61 @@ private:
       request.parameter = payload.dump();
     }
     request_pub_->publish(request);
+  }
+
+  bool publish_named_command(const std::string & command)
+  {
+    const std::string normalized = normalize_command(command);
+    if (normalized == "balance_stand") {
+      publish_motion_request(kApiBalanceStand);
+      return true;
+    }
+    if (normalized == "recovery_stand") {
+      publish_motion_request(kApiRecoveryStand);
+      return true;
+    }
+    if (normalized == "stand_down") {
+      publish_motion_request(kApiStandDown);
+      return true;
+    }
+    if (normalized == "damp") {
+      publish_motion_request(kApiDamp);
+      return true;
+    }
+    if (normalized == "stop_move") {
+      have_cmd_ = false;
+      sent_timeout_stop_ = true;
+      publish_motion_request(kApiStopMove);
+      return true;
+    }
+
+    return false;
+  }
+
+  void on_motion_command(const b2_interface::msg::B2MotionCommand::SharedPtr msg)
+  {
+    const std::string command = normalize_command(msg->command);
+    if (command.empty()) {
+      RCLCPP_WARN(get_logger(), "Ignoring empty B2 motion command.");
+      return;
+    }
+
+    if (command == "move") {
+      last_cmd_.linear.x = msg->linear_x;
+      last_cmd_.linear.y = msg->linear_y;
+      last_cmd_.linear.z = 0.0;
+      last_cmd_.angular.x = 0.0;
+      last_cmd_.angular.y = 0.0;
+      last_cmd_.angular.z = msg->angular_z;
+      last_cmd_time_ = now();
+      have_cmd_ = true;
+      sent_timeout_stop_ = false;
+      return;
+    }
+
+    if (!publish_named_command(command)) {
+      RCLCPP_WARN(get_logger(), "Unsupported B2 motion command: '%s'.", command.c_str());
+    }
   }
 
   void on_timer()
@@ -149,6 +213,7 @@ private:
   }
 
   std::string cmd_vel_topic_;
+  std::string motion_command_topic_;
   std::string request_topic_;
   double max_linear_x_{0.8};
   double max_linear_y_{0.4};
@@ -157,13 +222,14 @@ private:
   double command_rate_hz_{20.0};
   double cmd_timeout_{0.5};
   bool stop_on_timeout_{true};
-  bool auto_balance_stand_{true};
+  bool auto_balance_stand_{false};
   bool have_cmd_{false};
   bool sent_timeout_stop_{false};
   geometry_msgs::msg::Twist last_cmd_;
   rclcpp::Time last_cmd_time_;
   rclcpp::Publisher<unitree_api::msg::Request>::SharedPtr request_pub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_sub_;
+  rclcpp::Subscription<b2_interface::msg::B2MotionCommand>::SharedPtr motion_cmd_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::TimerBase::SharedPtr startup_timer_;
   std::vector<rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr> services_;

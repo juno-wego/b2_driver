@@ -1,0 +1,29 @@
+b2_cmd_vel_bridge:
+  ros__parameters:
+    cmd_vel_topic: /cmd_vel
+    motion_command_topic: /b2/motion_command
+    request_topic: /api/sport/request
+    max_linear_x: 0.8
+    max_linear_y: 0.4
+    max_angular_z: 1.2
+    deadband: 0.01
+    command_rate_hz: 20.0
+    cmd_timeout: 0.5
+    stop_on_timeout: true
+    auto_balance_stand_on_start: false
+
+b2_state_bridge:
+  ros__parameters:
+    sport_state_topic: /sportmodestate
+    low_state_topic: /lowstate
+    odom_topic: /b2/odom
+    imu_topic: /b2/imu
+    joint_state_topic: /b2/joint_states
+    foot_force_topic: /b2/foot_force
+    battery_topic: /b2/battery_state
+    status_topic: /b2/status
+    sport_state_output_topic: /b2/sport_state
+    odom_frame: odom
+    base_frame: base_link
+    imu_frame: imu_link
+    publish_tf: true
