@@ -1,0 +1,9 @@
+std_msgs/Header header
+string command
+float64 linear_x
+float64 linear_y
+float64 angular_z
+bool enable
+bool stand_up
+bool sit_down
+bool emergency_stop
