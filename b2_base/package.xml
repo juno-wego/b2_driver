@@ -19,6 +19,10 @@
   <depend>unitree_api</depend>
   <depend>unitree_go</depend>
 
+  <!-- unitree_sdk2 is discovered optionally in CMake because it is installed
+       from Unitree rather than released through rosdep. -->
+  <exec_depend>rmw_fastrtps_cpp</exec_depend>
+
   <exec_depend>b2_driver_description</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>

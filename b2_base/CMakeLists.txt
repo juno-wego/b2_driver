@@ -19,6 +19,9 @@ find_package(std_srvs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(unitree_api REQUIRED)
 find_package(unitree_go REQUIRED)
+# The hardware node uses the vendor SDK directly. Keep it optional so the
+# ROS-only bridge and the MuJoCo workspace remain buildable on development PCs.
+find_package(unitree_sdk2 QUIET)
 
 add_executable(b2_cmd_vel_bridge src/b2_cmd_vel_bridge.cpp)
 ament_target_dependencies(b2_cmd_vel_bridge
@@ -42,11 +45,31 @@ ament_target_dependencies(b2_state_bridge
   unitree_go
 )
 
+if(unitree_sdk2_FOUND)
+  add_executable(b2_sdk_driver src/b2_sdk_driver.cpp)
+  ament_target_dependencies(b2_sdk_driver
+    geometry_msgs
+    nav_msgs
+    rclcpp
+    sensor_msgs
+    std_msgs
+    std_srvs
+    tf2_ros
+  )
+  target_link_libraries(b2_sdk_driver unitree_sdk2)
+else()
+  message(STATUS "unitree_sdk2 not found: b2_sdk_driver will not be built")
+endif()
+
 install(TARGETS
   b2_cmd_vel_bridge
   b2_state_bridge
   DESTINATION lib/${PROJECT_NAME}
 )
+
+if(TARGET b2_sdk_driver)
+  install(TARGETS b2_sdk_driver DESTINATION lib/${PROJECT_NAME})
+endif()
 
 install(PROGRAMS
   scripts/set_unitree_static_ip.sh
