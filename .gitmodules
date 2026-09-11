@@ -1,0 +1,6 @@
+[submodule "b2_interface/upstream/unitree_ros2"]
+	path = b2_interface/upstream/unitree_ros2
+	url = https://github.com/unitreerobotics/unitree_ros2.git
+[submodule "b2_base/upstream/unitree_sdk2"]
+	path = b2_base/upstream/unitree_sdk2
+	url = https://github.com/unitreerobotics/unitree_sdk2.git

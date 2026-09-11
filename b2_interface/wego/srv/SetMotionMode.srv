@@ -1,0 +1,19 @@
+# B2-specific motion mode selection. cmd_vel remains the velocity input.
+uint8 DAMP=0
+uint8 BALANCE_STAND=1
+uint8 STAND_UP=2
+uint8 STAND_DOWN=3
+uint8 RECOVERY_STAND=4
+uint8 FREE_WALK=5
+uint8 CLASSIC_WALK_ON=6
+uint8 CLASSIC_WALK_OFF=7
+uint8 SPEED_LOW=8
+uint8 SPEED_HIGH=9
+uint8 VISION_WALK_ON=10
+uint8 VISION_WALK_OFF=11
+
+uint8 mode
+---
+bool success
+int32 result_code
+string message

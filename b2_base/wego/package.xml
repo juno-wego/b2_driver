@@ -19,8 +19,8 @@
   <depend>unitree_api</depend>
   <depend>unitree_go</depend>
 
-  <!-- unitree_sdk2 is discovered optionally in CMake because it is installed
-       from Unitree rather than released through rosdep. -->
+  <!-- Unitree SDK2 is provided by the pinned upstream submodule. CMake keeps
+       a system installation as an opt-in fallback when submodules are absent. -->
   <exec_depend>rmw_fastrtps_cpp</exec_depend>
 
   <exec_depend>b2_driver_description</exec_depend>

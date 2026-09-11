@@ -1,0 +1,28 @@
+# ---- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# ---- generated / local ------------------------------------------------------
+log/
+# xacro -> urdf output, if generated in place rather than at launch time.
+*.urdf.xacro.out
+
+# rosbags and captured data: large, and belong beside the experiment, not here.
+*.db3
+*.mcap
+rosbag2_*/
+
+# ---- editors and OS ---------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Note: b2_description/meshes/ and dae/ are tracked on purpose -- the URDF
+# references package://b2_driver_description/meshes/.  They are also byte
+# identical duplicates of each other (163 MB each); see README if that ever
+# needs trimming.  Listing them here would do nothing, since .gitignore does
+# not affect files git already tracks.

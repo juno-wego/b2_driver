@@ -3,15 +3,13 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#include <functional>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
 #include <utility>
-#include <vector>
-
+#include "b2_interface/srv/set_motion_mode.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -121,18 +119,21 @@ public:
         have_command_ = true;
       });
 
-    add_motion_service("/b2/motion/damp", [this]() { return sport_client_->Damp(); });
-    add_motion_service("/b2/motion/free_walk", [this]() { return sport_client_->FreeWalk(); });
-    add_motion_service("/b2/motion/classic_walk/on", [this]() { return sport_client_->ClassicWalk(true); });
-    add_motion_service("/b2/motion/classic_walk/off", [this]() { return sport_client_->ClassicWalk(false); });
-    add_motion_service("/b2/motion/speed/low", [this]() { return sport_client_->SpeedLevel(-1); });
-    add_motion_service("/b2/motion/speed/high", [this]() { return sport_client_->SpeedLevel(1); });
-    add_motion_service("/b2/motion/stand_up", [this]() { return sport_client_->StandUp(); });
-    add_motion_service("/b2/motion/stand_down", [this]() { return sport_client_->StandDown(); });
-    add_motion_service("/b2/motion/balance_stand", [this]() { return sport_client_->BalanceStand(); });
-    add_motion_service("/b2/motion/vision_walk/on", [this]() { return sport_client_->VisionWalk(true); });
-    add_motion_service("/b2/motion/vision_walk/off", [this]() { return sport_client_->VisionWalk(false); });
-    add_motion_service("/b2/motion/stop", [this]() { return sport_client_->StopMove(); });
+    motion_mode_service_ = create_service<b2_interface::srv::SetMotionMode>(
+      "/b2/motion/set_mode",
+      std::bind(&B2SdkDriver::set_motion_mode, this, std::placeholders::_1, std::placeholders::_2));
+    motion_stop_service_ = create_service<std_srvs::srv::Trigger>(
+      "/b2/motion/stop",
+      [this](
+        const std_srvs::srv::Trigger::Request::SharedPtr,
+        std_srvs::srv::Trigger::Response::SharedPtr response) {
+        const int32_t result = sport_client_->StopMove();
+        response->success = result == 0;
+        response->message = "Unitree SDK2 StopMove result=" + std::to_string(result);
+        if (result != 0) {
+          RCLCPP_WARN(get_logger(), "StopMove failed with Unitree SDK2 result %d.", result);
+        }
+      });
 
     sport_state_sub_ = std::make_shared<SportSubscriber>(kSportStateTopic);
     sport_state_sub_->InitChannel([this](const void * message) { on_sport_state(message); });
@@ -170,20 +171,40 @@ private:
   using SportSubscriber = unitree::robot::ChannelSubscriber<SportState>;
   using LowSubscriber = unitree::robot::ChannelSubscriber<LowState>;
 
-  void add_motion_service(const std::string & name, std::function<int32_t()> command)
+  void set_motion_mode(
+    const b2_interface::srv::SetMotionMode::Request::SharedPtr request,
+    b2_interface::srv::SetMotionMode::Response::SharedPtr response)
   {
-    motion_services_.push_back(create_service<std_srvs::srv::Trigger>(
-      name,
-      [this, name, command = std::move(command)](
-        const std_srvs::srv::Trigger::Request::SharedPtr,
-        std_srvs::srv::Trigger::Response::SharedPtr response) {
-        const int32_t result = command();
-        response->success = result == 0;
-        response->message = "Unitree SDK2 " + name + " result=" + std::to_string(result);
-        if (result != 0) {
-          RCLCPP_WARN(get_logger(), "%s failed with Unitree SDK2 result %d.", name.c_str(), result);
-        }
-      }));
+    using Request = b2_interface::srv::SetMotionMode::Request;
+
+    int32_t result = -1;
+    std::string mode_name;
+    switch (request->mode) {
+      case Request::DAMP: mode_name = "damp"; result = sport_client_->Damp(); break;
+      case Request::BALANCE_STAND: mode_name = "balance_stand"; result = sport_client_->BalanceStand(); break;
+      case Request::STAND_UP: mode_name = "stand_up"; result = sport_client_->StandUp(); break;
+      case Request::STAND_DOWN: mode_name = "stand_down"; result = sport_client_->StandDown(); break;
+      case Request::RECOVERY_STAND: mode_name = "recovery_stand"; result = sport_client_->RecoveryStand(); break;
+      case Request::FREE_WALK: mode_name = "free_walk"; result = sport_client_->FreeWalk(); break;
+      case Request::CLASSIC_WALK_ON: mode_name = "classic_walk_on"; result = sport_client_->ClassicWalk(true); break;
+      case Request::CLASSIC_WALK_OFF: mode_name = "classic_walk_off"; result = sport_client_->ClassicWalk(false); break;
+      case Request::SPEED_LOW: mode_name = "speed_low"; result = sport_client_->SpeedLevel(-1); break;
+      case Request::SPEED_HIGH: mode_name = "speed_high"; result = sport_client_->SpeedLevel(1); break;
+      case Request::VISION_WALK_ON: mode_name = "vision_walk_on"; result = sport_client_->VisionWalk(true); break;
+      case Request::VISION_WALK_OFF: mode_name = "vision_walk_off"; result = sport_client_->VisionWalk(false); break;
+      default:
+        response->success = false;
+        response->result_code = -1;
+        response->message = "Unsupported B2 motion mode: " + std::to_string(request->mode);
+        RCLCPP_WARN(get_logger(), "%s", response->message.c_str());
+        return;
+    }
+    response->success = result == 0;
+    response->result_code = result;
+    response->message = "Unitree SDK2 " + mode_name + " result=" + std::to_string(result);
+    if (result != 0) {
+      RCLCPP_WARN(get_logger(), "%s", response->message.c_str());
+    }
   }
 
   void send_velocity_command()
@@ -409,7 +430,8 @@ private:
   rclcpp::TimerBase::SharedPtr low_state_timer_;
   rclcpp::TimerBase::SharedPtr health_timer_;
   rclcpp::TimerBase::SharedPtr startup_timer_;
-  std::vector<rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr> motion_services_;
+  rclcpp::Service<b2_interface::srv::SetMotionMode>::SharedPtr motion_mode_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr motion_stop_service_;
 };
 }  // namespace
 

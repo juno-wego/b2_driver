@@ -4,12 +4,14 @@
 #include <string>
 #include <vector>
 
-#include "b2_interface/msg/b2_battery_state.hpp"
-#include "b2_interface/msg/b2_status.hpp"
 #include "geometry_msgs/msg/quaternion.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include <algorithm>
+#include <limits>
+
+#include "sensor_msgs/msg/battery_state.hpp"
 #include "sensor_msgs/msg/imu.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/int16_multi_array.hpp"
@@ -26,33 +28,27 @@ public:
     sport_state_topic_ = declare_parameter<std::string>("sport_state_topic", "/sportmodestate");
     low_state_topic_ = declare_parameter<std::string>("low_state_topic", "/lowstate");
     odom_topic_ = declare_parameter<std::string>("odom_topic", "/b2/odom");
-    imu_topic_ = declare_parameter<std::string>("imu_topic", "/b2/imu");
+    imu_topic_ = declare_parameter<std::string>("imu_topic", "/b2/imu/data");
     joint_state_topic_ = declare_parameter<std::string>("joint_state_topic", "/b2/joint_states");
     foot_force_topic_ = declare_parameter<std::string>("foot_force_topic", "/b2/foot_force");
     battery_topic_ = declare_parameter<std::string>("battery_topic", "/b2/battery_state");
-    status_topic_ = declare_parameter<std::string>("status_topic", "/b2/status");
-    sport_state_output_topic_ =
-      declare_parameter<std::string>("sport_state_output_topic", "/b2/sport_state");
     odom_frame_ = declare_parameter<std::string>("odom_frame", "odom");
     base_frame_ = declare_parameter<std::string>("base_frame", "base_link");
     imu_frame_ = declare_parameter<std::string>("imu_frame", "imu_link");
     publish_tf_ = declare_parameter<bool>("publish_tf", true);
 
     auto sensor_qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
-    auto reliable_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable();
-
     odom_pub_ = create_publisher<nav_msgs::msg::Odometry>(odom_topic_, sensor_qos);
     imu_pub_ = create_publisher<sensor_msgs::msg::Imu>(imu_topic_, sensor_qos);
     joint_state_pub_ =
       create_publisher<sensor_msgs::msg::JointState>(joint_state_topic_, sensor_qos);
     foot_force_pub_ =
       create_publisher<std_msgs::msg::Int16MultiArray>(foot_force_topic_, sensor_qos);
-    battery_pub_ =
-      create_publisher<b2_interface::msg::B2BatteryState>(battery_topic_, reliable_qos);
-    status_pub_ = create_publisher<b2_interface::msg::B2Status>(status_topic_, reliable_qos);
-    sport_state_pub_ =
-      create_publisher<unitree_go::msg::SportModeState>(sport_state_output_topic_, sensor_qos);
-
+    // Battery is small and slow, and the control station shows it as a number
+    // an operator decides on. Reliable, and latched so a station that connects
+    // late is not left with an empty gauge until the next second ticks.
+    battery_pub_ = create_publisher<sensor_msgs::msg::BatteryState>(
+      battery_topic_, rclcpp::QoS(1).transient_local());
     if (publish_tf_) {
       tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
     }
@@ -74,6 +70,10 @@ public:
 private:
   void on_sport_state(const unitree_go::msg::SportModeState::SharedPtr msg)
   {
+    if (!have_sport_state_) {
+      have_sport_state_ = true;
+      RCLCPP_INFO(get_logger(), "Receiving B2 sport state from %s.", sport_state_topic_.c_str());
+    }
     const auto stamp = now();
 
     nav_msgs::msg::Odometry odom;
@@ -115,31 +115,14 @@ private:
       tf_broadcaster_->sendTransform(transform);
     }
 
-    b2_interface::msg::B2Status status;
-    status.header.stamp = stamp;
-    status.header.frame_id = base_frame_;
-    status.mode = msg->mode;
-    status.gait_type = msg->gait_type;
-    status.error_code = msg->error_code;
-    status.body_height = msg->body_height;
-    status.position = msg->position;
-    status.velocity = msg->velocity;
-    status.yaw_speed = msg->yaw_speed;
-    status.battery_soc = battery_soc_;
-    status.battery_voltage = battery_voltage_;
-    status.battery_current = battery_current_;
-    status.low_state_available = have_low_state_;
-    status_pub_->publish(status);
-    sport_state_pub_->publish(*msg);
   }
 
   void on_low_state(const unitree_go::msg::LowState::SharedPtr msg)
   {
+    if (!have_low_state_) {
+      RCLCPP_INFO(get_logger(), "Receiving B2 low state from %s.", low_state_topic_.c_str());
+    }
     have_low_state_ = true;
-    battery_soc_ = msg->bms_state.soc;
-    battery_voltage_ = msg->power_v;
-    battery_current_ = msg->power_a;
-
     sensor_msgs::msg::JointState joint_state;
     joint_state.header.stamp = now();
     joint_state.name = joint_names_;
@@ -159,13 +142,54 @@ private:
     foot_force.data.assign(msg->foot_force.begin(), msg->foot_force.end());
     foot_force_pub_->publish(foot_force);
 
-    b2_interface::msg::B2BatteryState battery_state;
-    battery_state.voltage = msg->power_v;
-    battery_state.current = msg->power_a;
-    battery_state.soc = msg->bms_state.soc;
-    battery_state.temperature_ntc1 = msg->temperature_ntc1;
-    battery_state.temperature_ntc2 = msg->temperature_ntc2;
-    battery_pub_->publish(battery_state);
+    publish_battery(msg);
+  }
+
+  /// LowState's BMS block as a sensor_msgs/BatteryState.
+  ///
+  /// The simulator publishes the same message on the same topic, so nothing
+  /// above this node - not the bridge, not the control station - can tell a
+  /// simulated robot from a real one. That equivalence is the point: the
+  /// station is validated against the simulator and then pointed at hardware
+  /// by changing an address, not by changing what it understands.
+  ///
+  /// Rate-limited to 1 Hz. LowState arrives at 500 Hz and the pack does not
+  /// move that fast.
+  void publish_battery(const unitree_go::msg::LowState::SharedPtr & msg)
+  {
+    const auto stamp = now();
+    if ((stamp - last_battery_).seconds() < 1.0) {
+      return;
+    }
+    last_battery_ = stamp;
+
+    const auto & bms = msg->bms_state;
+    sensor_msgs::msg::BatteryState battery;
+    battery.header.stamp = stamp;
+    battery.percentage = static_cast<float>(bms.soc) / 100.0f;
+    battery.voltage = msg->power_v;
+    // Unitree reports pack current in mA, and discharge as a positive number;
+    // BatteryState wants amps, negative while discharging.
+    battery.current = -static_cast<float>(bms.current) / 1000.0f;
+    battery.power_supply_status = bms.current < 0
+      ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING
+      : sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING;
+    battery.power_supply_technology =
+      sensor_msgs::msg::BatteryState::POWER_SUPPLY_TECHNOLOGY_LION;
+    battery.present = true;
+
+    // The pack reports two BQ and two MCU probes; the hottest is the one worth
+    // acting on.
+    int8_t hottest = std::numeric_limits<int8_t>::min();
+    for (const auto & t : bms.bq_ntc) { hottest = std::max(hottest, t); }
+    for (const auto & t : bms.mcu_ntc) { hottest = std::max(hottest, t); }
+    battery.temperature = static_cast<float>(hottest);
+
+    battery.cell_voltage.reserve(bms.cell_vol.size());
+    for (const auto & mv : bms.cell_vol) {
+      battery.cell_voltage.push_back(static_cast<float>(mv) / 1000.0f);
+    }
+    battery_pub_->publish(battery);
   }
 
   void fill_quaternion(
@@ -191,24 +215,19 @@ private:
   std::string joint_state_topic_;
   std::string foot_force_topic_;
   std::string battery_topic_;
-  std::string status_topic_;
-  std::string sport_state_output_topic_;
   std::string odom_frame_;
   std::string base_frame_;
   std::string imu_frame_;
   bool publish_tf_{true};
   bool have_low_state_{false};
-  uint8_t battery_soc_{0};
-  float battery_voltage_{0.0F};
-  float battery_current_{0.0F};
+  rclcpp::Time last_battery_{0, 0, RCL_ROS_TIME};
+  bool have_sport_state_{false};
 
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
   rclcpp::Publisher<std_msgs::msg::Int16MultiArray>::SharedPtr foot_force_pub_;
-  rclcpp::Publisher<b2_interface::msg::B2BatteryState>::SharedPtr battery_pub_;
-  rclcpp::Publisher<b2_interface::msg::B2Status>::SharedPtr status_pub_;
-  rclcpp::Publisher<unitree_go::msg::SportModeState>::SharedPtr sport_state_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::BatteryState>::SharedPtr battery_pub_;
   rclcpp::Subscription<unitree_go::msg::SportModeState>::SharedPtr sport_state_sub_;
   rclcpp::Subscription<unitree_go::msg::LowState>::SharedPtr low_state_sub_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;

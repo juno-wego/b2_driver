@@ -1,7 +1,6 @@
 b2_cmd_vel_bridge:
   ros__parameters:
     cmd_vel_topic: /cmd_vel
-    motion_command_topic: /b2/motion_command
     request_topic: /api/sport/request
     max_linear_x: 0.8
     max_linear_y: 0.4
@@ -17,19 +16,17 @@ b2_state_bridge:
     sport_state_topic: /sportmodestate
     low_state_topic: /lowstate
     odom_topic: /b2/odom
-    imu_topic: /b2/imu
+    imu_topic: /b2/imu/data
     joint_state_topic: /b2/joint_states
     foot_force_topic: /b2/foot_force
-    battery_topic: /b2/battery_state
-    status_topic: /b2/status
-    sport_state_output_topic: /b2/sport_state
     odom_frame: odom
     base_frame: base_link
     imu_frame: imu_link
     publish_tf: true
 
-# Direct Unitree SDK2 hardware driver. MuJoCo continues to own /cmd_vel through
-# its policy runner, while hardware uses the vendor SDK without an extra ROS
+# Direct Unitree SDK2 hardware driver.  This is deliberately separate from
+# the ROS/DDS bridge above: MuJoCo continues to own /cmd_vel through its
+# policy runner, while hardware can use the vendor SDK without an extra ROS
 # request topic in between.
 b2_sdk_driver:
   ros__parameters:
@@ -43,6 +40,8 @@ b2_sdk_driver:
     foot_force_topic: /b2/foot_force
     mode_topic: /b2/mode_code
     comm_ok_topic: /b2/comm_ok
+    # Keep the established Nav2/SLAM TF tree by default.  Multi-robot users
+    # can set these to b2/odom, b2/base_link, and b2/imu_link together.
     odom_frame: odom
     base_frame: base_link
     imu_frame: imu_link
