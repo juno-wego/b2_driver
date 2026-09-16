@@ -1,0 +1,24 @@
+Wego Proprietary License
+Copyright (c) 2026 Wego Robotics. All rights reserved.
+
+This license applies only to the Wego-authored wrapper code and accompanying
+configuration in the following directories:
+
+  - b2_base/wego/
+  - b2_interface/wego/
+
+No permission is granted to use, copy, modify, distribute, sublicense, or
+reverse engineer the Wego-authored material except under a separate written
+agreement with Wego Robotics.
+
+This license does not apply to any third-party material, including:
+
+  - b2_base/upstream/unitree_sdk2/
+  - b2_interface/upstream/unitree_ros2/
+  - b2_description/
+
+Third-party material remains subject to its own license or other applicable
+rights.  In particular, the Unitree SDK2 and Unitree ROS2 sources are covered
+by their included BSD-3-Clause license texts.  The B2 description assets are
+not covered by this license; their provenance is recorded in PROVENANCE.md and
+must be cleared before customer redistribution.
