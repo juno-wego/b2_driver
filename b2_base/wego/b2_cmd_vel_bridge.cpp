@@ -6,6 +6,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "velocity_limits.hpp"
+
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/trigger.hpp"
@@ -40,7 +42,8 @@ public:
   {
     cmd_vel_topic_ = declare_parameter<std::string>("cmd_vel_topic", "/cmd_vel");
     request_topic_ = declare_parameter<std::string>("request_topic", "/api/sport/request");
-    max_linear_x_ = declare_parameter<double>("max_linear_x", 0.8);
+    max_linear_x_ = declare_parameter<double>("max_linear_x", 1.0);
+    max_reverse_linear_x_ = declare_parameter<double>("max_reverse_linear_x", 0.8);
     max_linear_y_ = declare_parameter<double>("max_linear_y", 0.4);
     max_angular_z_ = declare_parameter<double>("max_angular_z", 1.2);
     deadband_ = declare_parameter<double>("deadband", 0.01);
@@ -136,7 +139,8 @@ private:
     }
 
     sent_timeout_stop_ = false;
-    const double vx = apply_deadband(clamp_abs(last_cmd_.linear.x, max_linear_x_), deadband_);
+    const double vx = apply_deadband(b2_base::clamp_forward_speed(
+      last_cmd_.linear.x, max_linear_x_, max_reverse_linear_x_), deadband_);
     const double vy = apply_deadband(clamp_abs(last_cmd_.linear.y, max_linear_y_), deadband_);
     const double vyaw = apply_deadband(clamp_abs(last_cmd_.angular.z, max_angular_z_), deadband_);
     publish_move(vx, vy, vyaw);
@@ -144,7 +148,8 @@ private:
 
   std::string cmd_vel_topic_;
   std::string request_topic_;
-  double max_linear_x_{0.8};
+  double max_linear_x_{1.0};
+  double max_reverse_linear_x_{0.8};
   double max_linear_y_{0.4};
   double max_angular_z_{1.2};
   double deadband_{0.01};

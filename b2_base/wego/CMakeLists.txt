@@ -102,6 +102,9 @@ install(DIRECTORY
 )
 
 if(BUILD_TESTING)
+  add_executable(test_velocity_limits test/test_velocity_limits.cpp)
+  target_include_directories(test_velocity_limits PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME velocity_limits COMMAND test_velocity_limits)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()

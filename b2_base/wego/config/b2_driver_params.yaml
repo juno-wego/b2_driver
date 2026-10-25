@@ -2,7 +2,8 @@ b2_cmd_vel_bridge:
   ros__parameters:
     cmd_vel_topic: /cmd_vel
     request_topic: /api/sport/request
-    max_linear_x: 0.8
+    max_linear_x: 1.0
+    max_reverse_linear_x: 0.8
     max_linear_y: 0.4
     max_angular_z: 1.2
     deadband: 0.01
@@ -46,7 +47,8 @@ b2_sdk_driver:
     base_frame: base_link
     imu_frame: imu_link
     publish_tf: true
-    max_linear_x: 0.8
+    max_linear_x: 1.0
+    max_reverse_linear_x: 0.8
     max_linear_y: 0.4
     max_angular_z: 1.2
     deadband: 0.01

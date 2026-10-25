@@ -9,6 +9,7 @@
 #include <sstream>
 #include <string>
 #include <utility>
+#include "velocity_limits.hpp"
 #include "b2_interface/srv/set_motion_mode.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
@@ -79,7 +80,8 @@ public:
     base_frame_ = declare_parameter<std::string>("base_frame", "base_link");
     imu_frame_ = declare_parameter<std::string>("imu_frame", "imu_link");
     publish_tf_ = declare_parameter<bool>("publish_tf", true);
-    max_linear_x_ = declare_parameter<double>("max_linear_x", 0.8);
+    max_linear_x_ = declare_parameter<double>("max_linear_x", 1.0);
+    max_reverse_linear_x_ = declare_parameter<double>("max_reverse_linear_x", 0.8);
     max_linear_y_ = declare_parameter<double>("max_linear_y", 0.4);
     max_angular_z_ = declare_parameter<double>("max_angular_z", 1.2);
     deadband_ = declare_parameter<double>("deadband", 0.01);
@@ -234,7 +236,8 @@ private:
     }
 
     timeout_stop_sent_ = false;
-    const float vx = static_cast<float>(apply_deadband(clamp_abs(command.linear.x, max_linear_x_), deadband_));
+    const float vx = static_cast<float>(apply_deadband(b2_base::clamp_forward_speed(
+      command.linear.x, max_linear_x_, max_reverse_linear_x_), deadband_));
     const float vy = static_cast<float>(apply_deadband(clamp_abs(command.linear.y, max_linear_y_), deadband_));
     const float vyaw = static_cast<float>(apply_deadband(clamp_abs(command.angular.z, max_angular_z_), deadband_));
     const auto result = sport_client_->Move(vx, vy, vyaw);
@@ -391,7 +394,8 @@ private:
   std::string base_frame_;
   std::string imu_frame_;
   bool publish_tf_{true};
-  double max_linear_x_{0.8};
+  double max_linear_x_{1.0};
+  double max_reverse_linear_x_{0.8};
   double max_linear_y_{0.4};
   double max_angular_z_{1.2};
   double deadband_{0.01};

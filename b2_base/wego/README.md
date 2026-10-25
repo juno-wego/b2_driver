@@ -33,6 +33,10 @@ address to `192.168.123.99/24` unless you override it.
 
 ## Control
 
+Forward velocity is limited to `1.0 m/s`; reverse remains `0.8 m/s`.
+`config/b2_driver_params.yaml` sets `max_linear_x` and `max_reverse_linear_x`
+for both SDK2 and ROS/DDS transports. HMI and navigation may apply lower limits.
+
 Publish velocity commands:
 
 ```bash
