@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -48,8 +49,8 @@ double apply_deadband(double value, double deadband)
 class B2SdkDriver : public rclcpp::Node
 {
 public:
-  B2SdkDriver()
-  : Node("b2_sdk_driver")
+  explicit B2SdkDriver(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
+  : Node("b2_sdk_driver", options)
   {
     const auto interface = declare_parameter<std::string>("network_interface", "");
     const auto domain = static_cast<int32_t>(declare_parameter<int>("dds_domain", 0));
@@ -90,12 +91,23 @@ public:
     stop_on_timeout_ = declare_parameter<bool>("stop_on_timeout", true);
     auto_balance_stand_ = declare_parameter<bool>("auto_balance_stand_on_start", false);
     state_timeout_ = declare_parameter<double>("state_timeout", 0.5);
+    const auto command_rpc_timeout = declare_parameter<double>("command_rpc_timeout", 0.1);
+    if (!std::isfinite(command_rpc_timeout) || command_rpc_timeout <= 0.0 ||
+      command_rpc_timeout > cmd_timeout_ || !std::isfinite(state_timeout_) || state_timeout_ <= 0.0)
+    {
+      throw std::invalid_argument("command_rpc_timeout must be positive and <= cmd_timeout; state_timeout must be positive");
+    }
 
     // SportClient creates DDS channels in its constructor, so construct it
     // only after ChannelFactory has selected the B2 network interface.
     sport_client_ = std::make_unique<unitree::robot::b2::SportClient>();
-    sport_client_->SetTimeout(10.0F);
+    sport_client_->SetTimeout(static_cast<float>(command_rpc_timeout));
     sport_client_->Init();
+    mode_client_ = std::make_unique<unitree::robot::b2::SportClient>();
+    mode_client_->SetTimeout(10.0F);
+    mode_client_->Init();
+    command_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    mode_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
     const auto sensor_qos = rclcpp::SensorDataQoS();
     odom_pub_ = create_publisher<nav_msgs::msg::Odometry>(odom_topic_, sensor_qos);
@@ -115,7 +127,9 @@ public:
     cmd_sub_ = create_subscription<geometry_msgs::msg::Twist>(
       cmd_vel_topic_, rclcpp::QoS(10),
       [this](const geometry_msgs::msg::Twist::SharedPtr command) {
+        const bool connected = sport_state_fresh();
         std::lock_guard<std::mutex> lock(command_mutex_);
+        if (!connected || mode_busy_ || stop_pending_) {return;}
         last_command_ = *command;
         last_command_time_ = std::chrono::steady_clock::now();
         have_command_ = true;
@@ -123,19 +137,32 @@ public:
 
     motion_mode_service_ = create_service<b2_interface::srv::SetMotionMode>(
       "/b2/motion/set_mode",
-      std::bind(&B2SdkDriver::set_motion_mode, this, std::placeholders::_1, std::placeholders::_2));
+      std::bind(&B2SdkDriver::set_motion_mode, this, std::placeholders::_1, std::placeholders::_2),
+      rclcpp::ServicesQoS(), mode_group_);
     motion_stop_service_ = create_service<std_srvs::srv::Trigger>(
       "/b2/motion/stop",
       [this](
         const std_srvs::srv::Trigger::Request::SharedPtr,
         std_srvs::srv::Trigger::Response::SharedPtr response) {
+        std::lock_guard<std::mutex> motion_lock(motion_mutex_);
+        {
+          std::lock_guard<std::mutex> lock(command_mutex_);
+          have_command_ = false;
+          stop_pending_ = true;
+          ++stop_generation_;
+          last_command_ = geometry_msgs::msg::Twist{};
+        }
         const int32_t result = sport_client_->StopMove();
+        {
+          std::lock_guard<std::mutex> lock(command_mutex_);
+          stop_pending_ = result != 0;
+        }
         response->success = result == 0;
         response->message = "Unitree SDK2 StopMove result=" + std::to_string(result);
         if (result != 0) {
           RCLCPP_WARN(get_logger(), "StopMove failed with Unitree SDK2 result %d.", result);
         }
-      });
+      }, rclcpp::ServicesQoS(), command_group_);
 
     sport_state_sub_ = std::make_shared<SportSubscriber>(kSportStateTopic);
     sport_state_sub_->InitChannel([this](const void * message) { on_sport_state(message); });
@@ -145,7 +172,11 @@ public:
     const auto command_period = std::chrono::duration<double>(1.0 / std::max(1.0, command_rate_hz_));
     command_timer_ = create_wall_timer(
       std::chrono::duration_cast<std::chrono::nanoseconds>(command_period),
-      std::bind(&B2SdkDriver::send_velocity_command, this));
+      std::bind(&B2SdkDriver::send_velocity_command, this), command_group_);
+    // No SDK call is made from the fast callback group: a missing RPC response
+    // must not delay command expiry, state publication or ROS subscriptions.
+    watchdog_timer_ = create_wall_timer(std::chrono::milliseconds(20),
+      std::bind(&B2SdkDriver::watch_command, this));
     state_timer_ = create_wall_timer(std::chrono::milliseconds(33), std::bind(&B2SdkDriver::publish_sport_state, this));
     low_state_timer_ = create_wall_timer(std::chrono::milliseconds(100), std::bind(&B2SdkDriver::publish_low_state, this));
     health_timer_ = create_wall_timer(std::chrono::milliseconds(200), std::bind(&B2SdkDriver::publish_health, this));
@@ -156,10 +187,11 @@ public:
 
     if (auto_balance_stand_) {
       startup_timer_ = create_wall_timer(std::chrono::milliseconds(500), [this]() {
-        const auto result = sport_client_->BalanceStand();
-        RCLCPP_INFO(get_logger(), "Sent BalanceStand through Unitree SDK2 (result=%d).", result);
+        auto request = std::make_shared<b2_interface::srv::SetMotionMode::Request>();
+        request->mode = b2_interface::srv::SetMotionMode::Request::BALANCE_STAND;
+        set_motion_mode(request, std::make_shared<b2_interface::srv::SetMotionMode::Response>());
         startup_timer_->cancel();
-      });
+      }, mode_group_);
     }
 
     RCLCPP_INFO(
@@ -177,23 +209,50 @@ private:
     const b2_interface::srv::SetMotionMode::Request::SharedPtr request,
     b2_interface::srv::SetMotionMode::Response::SharedPtr response)
   {
+    {
+      std::lock_guard<std::mutex> lock(command_mutex_);
+      mode_busy_ = true;
+      have_command_ = false;
+      stop_pending_ = true;
+      ++stop_generation_;
+      last_command_ = geometry_msgs::msg::Twist{};
+    }
+    // Block new movement before waiting for the bounded in-flight Move RPC.
+    // Do not hold this mutex during the long mode transition itself.
+    {std::lock_guard<std::mutex> motion_lock(motion_mutex_);}
+    try {
+      call_motion_mode(request, response);
+    } catch (const std::exception & error) {
+      response->success = false;
+      response->result_code = -1;
+      response->message = error.what();
+    }
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    mode_busy_ = false;
+    have_command_ = false;
+  }
+
+  void call_motion_mode(
+    const b2_interface::srv::SetMotionMode::Request::SharedPtr request,
+    b2_interface::srv::SetMotionMode::Response::SharedPtr response)
+  {
     using Request = b2_interface::srv::SetMotionMode::Request;
 
     int32_t result = -1;
     std::string mode_name;
     switch (request->mode) {
-      case Request::DAMP: mode_name = "damp"; result = sport_client_->Damp(); break;
-      case Request::BALANCE_STAND: mode_name = "balance_stand"; result = sport_client_->BalanceStand(); break;
-      case Request::STAND_UP: mode_name = "stand_up"; result = sport_client_->StandUp(); break;
-      case Request::STAND_DOWN: mode_name = "stand_down"; result = sport_client_->StandDown(); break;
-      case Request::RECOVERY_STAND: mode_name = "recovery_stand"; result = sport_client_->RecoveryStand(); break;
-      case Request::FREE_WALK: mode_name = "free_walk"; result = sport_client_->FreeWalk(); break;
-      case Request::CLASSIC_WALK_ON: mode_name = "classic_walk_on"; result = sport_client_->ClassicWalk(true); break;
-      case Request::CLASSIC_WALK_OFF: mode_name = "classic_walk_off"; result = sport_client_->ClassicWalk(false); break;
-      case Request::SPEED_LOW: mode_name = "speed_low"; result = sport_client_->SpeedLevel(-1); break;
-      case Request::SPEED_HIGH: mode_name = "speed_high"; result = sport_client_->SpeedLevel(1); break;
-      case Request::VISION_WALK_ON: mode_name = "vision_walk_on"; result = sport_client_->VisionWalk(true); break;
-      case Request::VISION_WALK_OFF: mode_name = "vision_walk_off"; result = sport_client_->VisionWalk(false); break;
+      case Request::DAMP: mode_name = "damp"; result = mode_client_->Damp(); break;
+      case Request::BALANCE_STAND: mode_name = "balance_stand"; result = mode_client_->BalanceStand(); break;
+      case Request::STAND_UP: mode_name = "stand_up"; result = mode_client_->StandUp(); break;
+      case Request::STAND_DOWN: mode_name = "stand_down"; result = mode_client_->StandDown(); break;
+      case Request::RECOVERY_STAND: mode_name = "recovery_stand"; result = mode_client_->RecoveryStand(); break;
+      case Request::FREE_WALK: mode_name = "free_walk"; result = mode_client_->FreeWalk(); break;
+      case Request::CLASSIC_WALK_ON: mode_name = "classic_walk_on"; result = mode_client_->ClassicWalk(true); break;
+      case Request::CLASSIC_WALK_OFF: mode_name = "classic_walk_off"; result = mode_client_->ClassicWalk(false); break;
+      case Request::SPEED_LOW: mode_name = "speed_low"; result = mode_client_->SpeedLevel(-1); break;
+      case Request::SPEED_HIGH: mode_name = "speed_high"; result = mode_client_->SpeedLevel(1); break;
+      case Request::VISION_WALK_ON: mode_name = "vision_walk_on"; result = mode_client_->VisionWalk(true); break;
+      case Request::VISION_WALK_OFF: mode_name = "vision_walk_off"; result = mode_client_->VisionWalk(false); break;
       default:
         response->success = false;
         response->result_code = -1;
@@ -209,33 +268,53 @@ private:
     }
   }
 
+  bool sport_state_fresh()
+  {
+    std::lock_guard<std::mutex> lock(sport_state_mutex_);
+    return sport_state_ready_.load(std::memory_order_acquire) &&
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - sport_state_received_at_).count() <= state_timeout_;
+  }
+
+  void watch_command()
+  {
+    const bool connected = sport_state_fresh();
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    if (!have_command_) {return;}
+    const bool expired = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - last_command_time_).count() > cmd_timeout_;
+    if (!connected || expired || mode_busy_) {
+      have_command_ = false;
+      last_command_ = geometry_msgs::msg::Twist{};
+      if (stop_on_timeout_ || !connected || mode_busy_) {stop_pending_ = true; ++stop_generation_;}
+    }
+  }
+
   void send_velocity_command()
   {
+    std::lock_guard<std::mutex> motion_lock(motion_mutex_);
+    watch_command();
     geometry_msgs::msg::Twist command;
     bool have_command = false;
-    bool timed_out = false;
+    bool stop = false;
+    std::uint64_t stop_generation = 0;
     {
       std::lock_guard<std::mutex> lock(command_mutex_);
       have_command = have_command_;
-      if (have_command) {
-        command = last_command_;
-        const auto command_age = std::chrono::steady_clock::now() - last_command_time_;
-        timed_out = std::chrono::duration<double>(command_age).count() > cmd_timeout_;
-      }
+      command = last_command_;
+      stop = stop_pending_;
+      stop_generation = stop_generation_;
     }
-    if (!have_command) {
-      return;
-    }
-    if (timed_out) {
-      if (stop_on_timeout_ && !timeout_stop_sent_) {
-        const auto result = sport_client_->StopMove();
-        timeout_stop_sent_ = true;
-        RCLCPP_WARN(get_logger(), "cmd_vel timed out; sent Unitree SDK2 StopMove (result=%d).", result);
+    if (stop) {
+      const auto result = sport_client_->StopMove();
+      if (result == 0) {
+        std::lock_guard<std::mutex> lock(command_mutex_);
+        if (stop_generation == stop_generation_) {stop_pending_ = false;}
+      } else {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "StopMove failed (result=%d); movement remains blocked.", result);
       }
       return;
     }
-
-    timeout_stop_sent_ = false;
+    if (!have_command) {return;}
     const float vx = static_cast<float>(apply_deadband(b2_base::clamp_forward_speed(
       command.linear.x, max_linear_x_, max_reverse_linear_x_), deadband_));
     const float vy = static_cast<float>(apply_deadband(clamp_abs(command.linear.y, max_linear_y_), deadband_));
@@ -251,6 +330,8 @@ private:
     std::lock_guard<std::mutex> lock(sport_state_mutex_);
     latest_sport_state_ = *static_cast<const SportState *>(message);
     sport_state_received_at_ = std::chrono::steady_clock::now();
+    sport_state_stamp_ = now();
+    ++sport_generation_;
     sport_state_ready_.store(true, std::memory_order_release);
   }
 
@@ -258,6 +339,9 @@ private:
   {
     std::lock_guard<std::mutex> lock(low_state_mutex_);
     latest_low_state_ = *static_cast<const LowState *>(message);
+    low_state_received_at_ = std::chrono::steady_clock::now();
+    low_state_stamp_ = now();
+    ++low_generation_;
     low_state_ready_.store(true, std::memory_order_release);
   }
 
@@ -267,12 +351,18 @@ private:
       return;
     }
     SportState state;
+    builtin_interfaces::msg::Time stamp;
     {
       std::lock_guard<std::mutex> lock(sport_state_mutex_);
+      if (sport_generation_ == published_sport_generation_ ||
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - sport_state_received_at_).count() > state_timeout_)
+      {
+        return;
+      }
       state = latest_sport_state_;
+      stamp = sport_state_stamp_;
+      published_sport_generation_ = sport_generation_;
     }
-
-    const auto stamp = now();
     const auto & imu = state.imu_state();
     sensor_msgs::msg::Imu imu_message;
     imu_message.header.stamp = stamp;
@@ -325,9 +415,17 @@ private:
       return;
     }
     LowState state;
+    builtin_interfaces::msg::Time stamp;
     {
       std::lock_guard<std::mutex> lock(low_state_mutex_);
+      if (low_generation_ == published_low_generation_ ||
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - low_state_received_at_).count() > state_timeout_)
+      {
+        return;
+      }
       state = latest_low_state_;
+      stamp = low_state_stamp_;
+      published_low_generation_ = low_generation_;
     }
 
     static constexpr std::array<int, 12> kMotorIndex{3, 4, 5, 0, 1, 2, 9, 10, 11, 6, 7, 8};
@@ -336,7 +434,7 @@ private:
       "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint", "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint"};
 
     sensor_msgs::msg::JointState joints;
-    joints.header.stamp = now();
+    joints.header.stamp = stamp;
     for (std::size_t i = 0; i < kJointNames.size(); ++i) {
       const auto & motor = state.motor_state()[kMotorIndex[i]];
       joints.name.emplace_back(kJointNames[i]);
@@ -405,10 +503,17 @@ private:
   bool auto_balance_stand_{false};
   double state_timeout_{0.5};
   bool have_command_{false};
-  bool timeout_stop_sent_{false};
+  bool mode_busy_{false};
+  bool stop_pending_{false};
+  std::uint64_t stop_generation_{0};
   geometry_msgs::msg::Twist last_command_;
   std::chrono::steady_clock::time_point last_command_time_{};
   std::chrono::steady_clock::time_point sport_state_received_at_{};
+  std::chrono::steady_clock::time_point low_state_received_at_{};
+  builtin_interfaces::msg::Time sport_state_stamp_, low_state_stamp_;
+  std::uint64_t sport_generation_{0}, published_sport_generation_{0};
+  std::uint64_t low_generation_{0}, published_low_generation_{0};
+  std::mutex motion_mutex_;
   std::mutex command_mutex_;
   std::mutex sport_state_mutex_;
   std::mutex low_state_mutex_;
@@ -418,6 +523,8 @@ private:
   LowState latest_low_state_;
 
   std::unique_ptr<unitree::robot::b2::SportClient> sport_client_;
+  std::unique_ptr<unitree::robot::b2::SportClient> mode_client_;
+  rclcpp::CallbackGroup::SharedPtr command_group_, mode_group_;
   std::shared_ptr<SportSubscriber> sport_state_sub_;
   std::shared_ptr<LowSubscriber> low_state_sub_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
@@ -430,6 +537,7 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_sub_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   rclcpp::TimerBase::SharedPtr command_timer_;
+  rclcpp::TimerBase::SharedPtr watchdog_timer_;
   rclcpp::TimerBase::SharedPtr state_timer_;
   rclcpp::TimerBase::SharedPtr low_state_timer_;
   rclcpp::TimerBase::SharedPtr health_timer_;
@@ -439,11 +547,15 @@ private:
 };
 }  // namespace
 
+#ifndef B2_SDK_DRIVER_NO_MAIN
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
   try {
-    rclcpp::spin(std::make_shared<B2SdkDriver>());
+    auto driver = std::make_shared<B2SdkDriver>();
+    rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 4);
+    executor.add_node(driver);
+    executor.spin();
   } catch (const std::exception & error) {
     RCLCPP_FATAL(rclcpp::get_logger("b2_sdk_driver"), "%s", error.what());
     rclcpp::shutdown();
@@ -452,3 +564,4 @@ int main(int argc, char ** argv)
   rclcpp::shutdown();
   return 0;
 }
+#endif

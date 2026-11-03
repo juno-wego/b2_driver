@@ -102,6 +102,15 @@ install(DIRECTORY
 )
 
 if(BUILD_TESTING)
+  if(TARGET b2_sdk_driver)
+    find_package(ament_cmake_gtest REQUIRED)
+    ament_add_gtest(test_sdk_safety test/test_sdk_safety.cpp TIMEOUT 30)
+    ament_target_dependencies(test_sdk_safety b2_interface geometry_msgs nav_msgs rclcpp
+      sensor_msgs std_msgs std_srvs tf2_ros)
+    target_link_libraries(test_sdk_safety unitree_sdk2)
+    set_tests_properties(test_sdk_safety PROPERTIES RUN_SERIAL TRUE
+      ENVIRONMENT "ROS_DOMAIN_ID=154;RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST;CYCLONEDDS_URI=<CycloneDDS><Domain><General><Interfaces><NetworkInterface name=\"lo\"/></Interfaces><AllowMulticast>false</AllowMulticast></General><Discovery><Peers><Peer address=\"localhost\"/></Peers></Discovery></Domain></CycloneDDS>")
+  endif()
   add_executable(test_velocity_limits test/test_velocity_limits.cpp)
   target_include_directories(test_velocity_limits PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME velocity_limits COMMAND test_velocity_limits)
