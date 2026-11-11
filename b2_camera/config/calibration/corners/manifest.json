@@ -1,0 +1,66 @@
+{
+  "repository": "Wego-Robot-Engeering-Team/corners",
+  "branch": "robot",
+  "commit": "cc265b5dd849af219f1f94f6a28e35cf9ce24719",
+  "reviewed_date": "2026-11-09",
+  "intended_use": "provisional_reference_until_on_robot_calibration",
+  "image_size": [
+    1920,
+    1080
+  ],
+  "verified_camera_side": "front",
+  "rear_calibration_found": false,
+  "files": [
+    {
+      "archive_file": "b2_camera_info_raw.yaml",
+      "source_path": "sensors/b2_camera/b2_camera_bridge/config/b2_camera_info_raw.yaml",
+      "role": "front_raw",
+      "size_bytes": 588,
+      "sha256": "d636ca5e201b2bed6596eba50aad651f35f260ef3504ad5add78ecac2c5e6d89",
+      "git_blob": "9fef242e5ac3fb4bea696b139e3f6f14fab51d0c",
+      "source_url": "https://github.com/Wego-Robot-Engeering-Team/corners/blob/cc265b5dd849af219f1f94f6a28e35cf9ce24719/sensors/b2_camera/b2_camera_bridge/config/b2_camera_info_raw.yaml"
+    },
+    {
+      "archive_file": "b2_camera_info_rectified.yaml",
+      "source_path": "sensors/b2_camera/b2_camera_bridge/config/b2_camera_info_rectified.yaml",
+      "role": "historical_rectified_reference",
+      "size_bytes": 577,
+      "sha256": "6818ec075562417beae9897cdf4e5280d8c4635d3824ef2b23b45b2fe41cd322",
+      "git_blob": "d1c9b9ba7e4b8fef8aabfa47cc147638200e1f2a",
+      "source_url": "https://github.com/Wego-Robot-Engeering-Team/corners/blob/cc265b5dd849af219f1f94f6a28e35cf9ce24719/sensors/b2_camera/b2_camera_bridge/config/b2_camera_info_rectified.yaml"
+    },
+    {
+      "archive_file": "ost.yaml",
+      "source_path": "sensors/b2_camera/b2_camera_calibration/data/fisheye/ost.yaml",
+      "role": "matching_fisheye_calibration_output",
+      "size_bytes": 654,
+      "sha256": "d604261e916c9cd8ba02707daf1b9f8b3dd7017e8e562a53aff044948913896a",
+      "git_blob": "4e49d9b7ecce0ed5f3ed06aba8ebd93c3e964fc6",
+      "source_url": "https://github.com/Wego-Robot-Engeering-Team/corners/blob/cc265b5dd849af219f1f94f6a28e35cf9ce24719/sensors/b2_camera/b2_camera_calibration/data/fisheye/ost.yaml"
+    },
+    {
+      "archive_file": "260402_1312.txt",
+      "source_path": "sensors/b2_camera/b2_camera_calibration/data/fisheye/260402_1312.txt",
+      "role": "supporting_session_log",
+      "size_bytes": 1965,
+      "sha256": "8db70feefb7a4ba5f6b40fbd6853557b61a4d54854fef0370985049c3af66b6a",
+      "git_blob": "9642aa4488ce6c7e6224733e17188788cdcbde1c",
+      "source_url": "https://github.com/Wego-Robot-Engeering-Team/corners/blob/cc265b5dd849af219f1f94f6a28e35cf9ce24719/sensors/b2_camera/b2_camera_calibration/data/fisheye/260402_1312.txt"
+    },
+    {
+      "archive_file": "ost.txt",
+      "source_path": "sensors/b2_camera/b2_camera_calibration/data/fisheye/ost.txt",
+      "role": "matching_ros_calibrator_text",
+      "size_bytes": 459,
+      "sha256": "e1c53b7f6b25255a3c161e6495359ffeae21c14db2e7e36dc6fdfe835a2ae707",
+      "git_blob": "a88632e820fd32ba526c4b58f62a35335b5fe405",
+      "source_url": "https://github.com/Wego-Robot-Engeering-Team/corners/blob/cc265b5dd849af219f1f94f6a28e35cf9ce24719/sensors/b2_camera/b2_camera_calibration/data/fisheye/ost.txt"
+    }
+  ],
+  "source_launch_note": "Source bridge reuses the front raw YAML as its rear default; this is not evidence of an independent rear measurement.",
+  "capture_dataset": {
+    "source_path": "sensors/b2_camera/b2_camera_calibration/data/fisheye/calibrationdata.tar.gz",
+    "copied": false,
+    "reason": "Only calibration results and supporting log are imported; original image archive remains at source."
+  }
+}

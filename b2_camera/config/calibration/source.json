@@ -1,0 +1,35 @@
+{
+  "profile": "b2_front_1920x1080.yaml",
+  "camera_side": "front",
+  "image_size": [
+    1920,
+    1080
+  ],
+  "source_repository": "Wego-Robot-Engeering-Team/corners",
+  "source_commit": "cc265b5dd849af219f1f94f6a28e35cf9ce24719",
+  "source_path": "sensors/b2_camera/b2_camera_bridge/config/b2_camera_info_raw.yaml",
+  "source_git_blob": "9fef242e5ac3fb4bea696b139e3f6f14fab51d0c",
+  "source_sha256": "d636ca5e201b2bed6596eba50aad651f35f260ef3504ad5add78ecac2c5e6d89",
+  "copy_policy": "K/D/R/P and dimensions unchanged; camera_name metadata normalized for CameraInfoManager",
+  "supporting_log": {
+    "path": "sensors/b2_camera/b2_camera_calibration/data/fisheye/260402_1312.txt",
+    "date_from_filename": "2026-04-02",
+    "scope": "front calibration values; rear RPC failures are not rear calibration"
+  },
+  "scope_notes": [
+    "No camera serial or mount TF is imported.",
+    "Rear calibration remains unspecified.",
+    "Use only with the matching physical camera at 1920x1080.",
+    "L2 rectification must handle measured input skew and derive a zero-skew projection."
+  ],
+  "profile_sha256": "7a1745b4abf8aa26610303808b3a442f34ca91c3be4a7e8cd747287185fd4e65",
+  "source_size_bytes": 588,
+  "profile_size_bytes": 594,
+  "metadata_changes": {
+    "camera_name": {
+      "source": "b2_camera",
+      "profile": "b2_front_camera"
+    }
+  },
+  "source_url": "https://github.com/Wego-Robot-Engeering-Team/corners/blob/cc265b5dd849af219f1f94f6a28e35cf9ce24719/sensors/b2_camera/b2_camera_bridge/config/b2_camera_info_raw.yaml"
+}

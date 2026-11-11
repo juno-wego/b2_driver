@@ -1,0 +1,13 @@
+run,frames,samples,batch,construction,p50_batch_mean_ns,p95_batch_mean_ns
+1,default,200,1000,fresh,68.004,70.552
+1,default,200,1000,reuse,11.201,11.392
+1,namespaced,200,1000,fresh,116.934,121.334
+1,namespaced,200,1000,reuse,11.188,11.252
+2,default,200,1000,fresh,67.650,70.920
+2,default,200,1000,reuse,11.042,11.329
+2,namespaced,200,1000,fresh,121.131,138.384
+2,namespaced,200,1000,reuse,11.641,14.146
+3,default,200,1000,fresh,68.805,149.096
+3,default,200,1000,reuse,11.049,26.803
+3,namespaced,200,1000,fresh,118.546,123.758
+3,namespaced,200,1000,reuse,11.026,11.079

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 WeGo Robotics. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Wego-Proprietary
+
 cmake_minimum_required(VERSION 3.8)
 project(b2_interface)
 
@@ -7,9 +10,19 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/SetMotionMode.srv"
+  "srv/SetBodyHeight.srv"
+  "srv/SetBodyPose.srv"
+  "srv/ConfigureGait.srv"
+  "srv/ConfigureHeightMode.srv"
+  "msg/SportStatus.msg"
+  "msg/MotorStatus.msg"
+  "msg/MotorStatusArray.msg"
+  "msg/DriverStatus.msg"
+  DEPENDENCIES std_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)

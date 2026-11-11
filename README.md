@@ -5,6 +5,29 @@ legacy Unitree ROS/DDS bridge is retained only for compatibility diagnostics.
 
 - `b2_base` — SDK2 hardware node, legacy bridge nodes, and bringup launch files
 - `b2_description` — meshes, URDF, RViz config, description launch
+- `b2_motion` — project posture services, including stand up and stand down
+- `b2_camera` — independent front/back SDK video, CameraInfo and calibration files
+- `b2_camera_calibration` — front/back monocular calibration GUI and saved datasets
+
+Body control, built-in cameras and their calibration tools are owned by this
+driver repository. They retain separate ROS packages/processes so the SDK video
+client and motion watchdog do not share a callback loop. Navigation, AprilTag
+recognition and docking remain outside this driver.
+
+See [SDK execution and performance](b2_base/wego/docs/performance.md) for
+callback isolation, posture command ordering and local measurements.
+
+```text
+b2_driver/
+├── b2_base/wego/                 # SDK body driver and launch entry points
+├── b2_interface/wego/            # project state/service messages
+├── b2_description/              # vendor robot geometry
+├── b2_motion/                   # posture API adapter
+├── b2_camera/config/calibration/
+│   ├── camera_info/             # separate measured front/back YAML files
+│   └── corners/                 # preserved reference calibration
+└── b2_camera_calibration/       # calibration tool
+```
 
 This repository covers the **physical robot** only. Simulation lives in its own
 repository; see [Simulation](#simulation) below.
@@ -70,6 +93,23 @@ For legacy ROS/DDS bridge diagnostics without binding an interface:
 ```bash
 ros2 launch b2_base b2_bringup.launch.py transport:=ros_bridge
 ```
+
+## Camera and calibration entry points
+
+```bash
+ros2 launch b2_base camera.launch.py network_interface:="$B2_NIC" \
+  camera_side:=front \
+  camera_info_url:=package://b2_camera/config/calibration/camera_info/b2_front_camera.yaml
+ros2 launch b2_base calibrate_camera.launch.py network_interface:="$B2_NIC" \
+  camera_side:=front board_size:=8x6 square_size_m:=0.025
+```
+
+The checkerboard values above are examples; replace them with the physical board.
+Use `camera_side:=back` separately for the rear camera. Calibration files and
+datasets are saved under `b2_camera/config/calibration/` by default.
+See [camera files](b2_camera/config/calibration/README.md) and
+[calibration tool](b2_camera_calibration/README.md). Body bringup does not start
+cameras unless explicitly requested through the corresponding camera launch.
 
 ## Interface
 

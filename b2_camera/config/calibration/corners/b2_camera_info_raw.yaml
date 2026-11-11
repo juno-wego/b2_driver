@@ -1,0 +1,26 @@
+image_width: 1920
+image_height: 1080
+camera_name: b2_camera
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [709.03283, 5.18641, 960.18835,
+         0.0, 719.53793, 506.59977,
+         0.0, 0.0, 1.0]
+distortion_model: equidistant
+distortion_coefficients:
+  rows: 1
+  cols: 4
+  data: [0.387385, 0.107582, -0.100004, -0.01427]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1.0, 0.0, 0.0,
+         0.0, 1.0, 0.0,
+         0.0, 0.0, 1.0]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [709.03283, 5.18641, 960.18835, 0.0,
+         0.0, 719.53793, 506.59977, 0.0,
+         0.0, 0.0, 1.0, 0.0]

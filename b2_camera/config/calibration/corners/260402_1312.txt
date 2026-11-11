@@ -1,0 +1,40 @@
+cameracalibrator-2] **** Calibrating ****
+[cameracalibrator-2] mono fisheye calibration...
+[b2_camera_bridge_node-1] [WARN] [1775103148.724924385] [b2_camera_bridge]: back camera GetImageSample() returned error code 3104
+[b2_camera_bridge_node-1] [WARN] [1775103150.926985884] [b2_camera_bridge]: back camera GetImageSample() returned error code 3104
+[cameracalibrator-2] D = [0.38738482561587056, 0.1075815174634632, -0.10000373452887856, -0.01426975730397003]
+[cameracalibrator-2] K = [709.0328265472635, 5.186406575920424, 960.188349807855, 0.0, 719.5379271310064, 506.5997694229434, 0.0, 0.0, 1.0]
+[cameracalibrator-2] R = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+[cameracalibrator-2] P = [709.0328265472635, 5.186406575920424, 960.188349807855, 0.0, 0.0, 719.5379271310064, 506.5997694229434, 0.0, 0.0, 0.0, 1.0, 0.0]
+[cameracalibrator-2] None
+[cameracalibrator-2] # oST version 5.0 parameters
+[cameracalibrator-2] 
+[cameracalibrator-2] 
+[cameracalibrator-2] [image]
+[cameracalibrator-2] 
+[cameracalibrator-2] width
+[cameracalibrator-2] 1920
+[cameracalibrator-2] 
+[cameracalibrator-2] height
+[cameracalibrator-2] 1080
+[cameracalibrator-2] 
+[cameracalibrator-2] [narrow_stereo]
+[cameracalibrator-2] 
+[cameracalibrator-2] camera matrix
+[cameracalibrator-2] 709.032827 5.186407 960.188350
+[cameracalibrator-2] 0.000000 719.537927 506.599769
+[cameracalibrator-2] 0.000000 0.000000 1.000000
+[cameracalibrator-2] 
+[cameracalibrator-2] distortion
+[cameracalibrator-2] 0.387385 0.107582 -0.100004 -0.014270
+[cameracalibrator-2] 
+[cameracalibrator-2] rectification
+[cameracalibrator-2] 1.000000 0.000000 0.000000
+[cameracalibrator-2] 0.000000 1.000000 0.000000
+[cameracalibrator-2] 0.000000 0.000000 1.000000
+[cameracalibrator-2] 
+[cameracalibrator-2] projection
+[cameracalibrator-2] 709.032827 5.186407 960.188350 0.000000
+[cameracalibrator-2] 0.000000 719.537927 506.599769 0.000000
+[cameracalibrator-2] 0.000000 0.000000 1.000000 0.000000
+[cameracalibrator-2] 

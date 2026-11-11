@@ -1,15 +1,19 @@
+// Copyright (c) 2026 WeGo Robotics. All rights reserved.
+// SPDX-License-Identifier: LicenseRef-Wego-Proprietary
+
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <memory>
+#include <limits>
 #include <string>
 #include <vector>
+#include "state_conversion.hpp"
 
 #include "geometry_msgs/msg/quaternion.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include <algorithm>
-#include <limits>
 
 #include "sensor_msgs/msg/battery_state.hpp"
 #include "sensor_msgs/msg/imu.hpp"
@@ -44,9 +48,8 @@ public:
       create_publisher<sensor_msgs::msg::JointState>(joint_state_topic_, sensor_qos);
     foot_force_pub_ =
       create_publisher<std_msgs::msg::Int16MultiArray>(foot_force_topic_, sensor_qos);
-    // Battery is small and slow, and the control station shows it as a number
-    // an operator decides on. Reliable, and latched so a station that connects
-    // late is not left with an empty gauge until the next second ticks.
+    // Battery also gates docking motion/charging. Retain the last sample for
+    // late subscribers, while forwarding each new LowState for freshness.
     battery_pub_ = create_publisher<sensor_msgs::msg::BatteryState>(
       battery_topic_, rclcpp::QoS(1).transient_local());
     if (publish_tf_) {
@@ -84,9 +87,10 @@ private:
     odom.pose.pose.position.y = msg->position[1];
     odom.pose.pose.position.z = msg->position[2];
     fill_quaternion(msg->imu_state.quaternion, odom.pose.pose.orientation);
-    odom.twist.twist.linear.x = msg->velocity[0];
-    odom.twist.twist.linear.y = msg->velocity[1];
-    odom.twist.twist.linear.z = msg->velocity[2];
+    const auto body_velocity = b2_base::velocity_in_body(msg->velocity, msg->imu_state.quaternion);
+    odom.twist.twist.linear.x = body_velocity[0];
+    odom.twist.twist.linear.y = body_velocity[1];
+    odom.twist.twist.linear.z = body_velocity[2];
     odom.twist.twist.angular.z = msg->yaw_speed;
     odom_pub_->publish(odom);
 
@@ -114,7 +118,6 @@ private:
       transform.transform.rotation = odom.pose.pose.orientation;
       tf_broadcaster_->sendTransform(transform);
     }
-
   }
 
   void on_low_state(const unitree_go::msg::LowState::SharedPtr msg)
@@ -153,16 +156,12 @@ private:
   /// station is validated against the simulator and then pointed at hardware
   /// by changing an address, not by changing what it understands.
   ///
-  /// Rate-limited to 1 Hz. LowState arrives at 500 Hz and the pack does not
-  /// move that fast.
+  /// Match the SDK transport: publish on new LowState only, without a timer
+  /// refreshing cached telemetry. A 1 Hz gauge throttle cannot satisfy the
+  /// physical docking profile's 0.5-second battery freshness requirement.
   void publish_battery(const unitree_go::msg::LowState::SharedPtr & msg)
   {
     const auto stamp = now();
-    if ((stamp - last_battery_).seconds() < 1.0) {
-      return;
-    }
-    last_battery_ = stamp;
-
     const auto & bms = msg->bms_state;
     sensor_msgs::msg::BatteryState battery;
     battery.header.stamp = stamp;
@@ -171,9 +170,10 @@ private:
     // Unitree reports pack current in mA, and discharge as a positive number;
     // BatteryState wants amps, negative while discharging.
     battery.current = -static_cast<float>(bms.current) / 1000.0f;
-    battery.power_supply_status = bms.current < 0
-      ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING
-      : sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING;
+    battery.power_supply_status = bms.current < 0 ?
+      sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING :
+      bms.current > 0 ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING :
+      sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_UNKNOWN;
     battery.power_supply_technology =
       sensor_msgs::msg::BatteryState::POWER_SUPPLY_TECHNOLOGY_LION;
     battery.present = true;
@@ -181,8 +181,8 @@ private:
     // The pack reports two BQ and two MCU probes; the hottest is the one worth
     // acting on.
     int8_t hottest = std::numeric_limits<int8_t>::min();
-    for (const auto & t : bms.bq_ntc) { hottest = std::max(hottest, t); }
-    for (const auto & t : bms.mcu_ntc) { hottest = std::max(hottest, t); }
+    for (const auto & t : bms.bq_ntc) {hottest = std::max(hottest, t);}
+    for (const auto & t : bms.mcu_ntc) {hottest = std::max(hottest, t);}
     battery.temperature = static_cast<float>(hottest);
 
     battery.cell_voltage.reserve(bms.cell_vol.size());
@@ -220,7 +220,6 @@ private:
   std::string imu_frame_;
   bool publish_tf_{true};
   bool have_low_state_{false};
-  rclcpp::Time last_battery_{0, 0, RCL_ROS_TIME};
   bool have_sport_state_{false};
 
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;

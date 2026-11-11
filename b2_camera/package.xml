@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>b2_camera</name>
+  <version>0.1.0</version>
+  <description>B2 SDK front/back image samples and measured ROS CameraInfo.</description>
+  <maintainer email="junoyoo@wego-robotics.com">Wego Robotics</maintainer>
+  <license>Proprietary</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>camera_info_manager</depend>
+  <depend>camera_calibration_parsers</depend>
+  <depend>ament_index_cpp</depend>
+  <depend>libopencv-dev</depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>rmw_fastrtps_cpp</exec_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>python3-yaml</test_depend>
+  <test_depend>rclpy</test_depend>
+  <test_depend>ament_index_python</test_depend>
+  <test_depend>rmw_cyclonedds_cpp</test_depend>
+  <test_depend>python3-opencv</test_depend>
+  <test_depend>python3-numpy</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

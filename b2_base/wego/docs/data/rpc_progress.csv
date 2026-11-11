@@ -1,0 +1,9 @@
+version,rmw,ros_executor_threads,stop_ready_before_mode,stop_wait_observed_ms,mode_rpc_observed_ms,odom_samples_during_rpc_window,maximum_odom_gap_ms
+before,not_recorded,1,false,300.107180,1555.196277,0,1544.867153
+before,not_recorded,4,true,4.971292,1504.492290,5,33.178803
+after,rmw_cyclonedds_cpp,1,true,9.400698,1508.783711,5,36.628519
+after,rmw_cyclonedds_cpp,2,true,8.837312,1506.493933,5,33.260480
+after,rmw_cyclonedds_cpp,4,true,8.280868,1504.489852,5,33.212078
+after,rmw_fastrtps_cpp,1,true,7.433192,1509.335351,5,33.210746
+after,rmw_fastrtps_cpp,2,true,8.304096,1504.823741,5,33.137430
+after,rmw_fastrtps_cpp,4,true,8.254366,1510.913217,5,33.264045

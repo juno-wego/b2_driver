@@ -31,6 +31,13 @@ b2_state_bridge:
 # request topic in between.
 b2_sdk_driver:
   ros__parameters:
+    # Original SportModeState.stamp on the controller time axis. Invalid,
+    # repeated or wrong-epoch samples never fall back to receipt time.
+    source_time.mode: source
+    source_time.offset_ns: 0
+    source_time.max_age_s: 0.5
+    source_time.future_tolerance_s: 0.05
+    enable_control: true
     network_interface: ""
     dds_domain: 0
     cmd_vel_topic: /cmd_vel
@@ -57,3 +64,27 @@ b2_sdk_driver:
     stop_on_timeout: true
     auto_balance_stand_on_start: false
     state_timeout: 0.5
+    # Read-only SDK checks. These never select/release/switch controllers.
+    controller.require_ready: true
+    controller.expected_form: "0"
+    controller.allowed_names: [normal, ai, advanced]
+    controller.poll_period_s: 1.0
+    controller.rpc_timeout_s: 0.15
+    controller.max_age_s: 2.5
+    configuration.stop_confirm_timeout_s: 2.0
+    configuration.stationary_linear_mps: 0.03
+    configuration.stationary_angular_radps: 0.05
+    # BodyHeight's reference and limits must be verified on this B2 firmware.
+    # These zero placeholders are NOT a physical height range.
+    body_height.enabled: false
+    body_height.minimum: 0.0
+    body_height.maximum: 0.0
+    # Body Euler angles are radians; configure permitted limits before enabling.
+    body_pose.enabled: false
+    body_pose.max_roll_rad: 0.0
+    body_pose.max_pitch_rad: 0.0
+    body_pose.max_yaw_rad: 0.0
+    gait_configuration.enabled: false
+    # Raw FreeHeight/GaitHeight switches; verify behavior on installed firmware.
+    height_mode_configuration.enabled: false
+    # gait_configuration.allowed_ids: [firmware-verified integer IDs]

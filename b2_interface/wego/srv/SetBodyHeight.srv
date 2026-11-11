@@ -1,0 +1,10 @@
+# Copyright (c) 2026 WeGo Robotics. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Wego-Proprietary
+
+# Argument passed to SDK BodyHeight, NOT the robot's overall height.
+# Units/reference and limits must be verified for the installed firmware.
+float64 height
+---
+bool success
+int32 result_code
+string message

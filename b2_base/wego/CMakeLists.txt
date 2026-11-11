@@ -1,3 +1,6 @@
+# Copyright (c) 2026 WeGo Robotics. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Wego-Proprietary
+
 cmake_minimum_required(VERSION 3.8)
 project(b2_base)
 
@@ -10,6 +13,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(ament_cmake REQUIRED)
 find_package(b2_interface REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -61,6 +65,7 @@ if(B2_UNITREE_SDK2_AVAILABLE)
   add_executable(b2_sdk_driver b2_sdk_driver.cpp)
   ament_target_dependencies(b2_sdk_driver
     b2_interface
+    diagnostic_msgs
     geometry_msgs
     nav_msgs
     rclcpp
@@ -102,20 +107,61 @@ install(DIRECTORY
 )
 
 if(BUILD_TESTING)
+  # ament_copyright only recognizes open-source license templates. Keep the
+  # existing proprietary license and verify its SPDX headers explicitly.
+  set(ament_cmake_copyright_FOUND TRUE)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(copyright test/test_source_headers.py)
+  string(CONCAT B2_TEST_LOOPBACK_DDS
+    "<CycloneDDS><Domain><General><Interfaces>"
+    "<NetworkInterface name=\"lo\"/></Interfaces><AllowMulticast>false</AllowMulticast>"
+    "</General><Discovery><Peers><Peer address=\"localhost\"/></Peers></Discovery>"
+    "</Domain></CycloneDDS>")
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_measurement_stamp test/test_measurement_stamp.cpp)
+  target_include_directories(test_measurement_stamp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_gtest(test_state_bridge test/test_state_bridge.cpp TIMEOUT 10
+    ENV "ROS_DOMAIN_ID=229" "RMW_IMPLEMENTATION=rmw_cyclonedds_cpp"
+      "CYCLONEDDS_URI=${B2_TEST_LOOPBACK_DDS}")
+  ament_target_dependencies(test_state_bridge geometry_msgs nav_msgs rclcpp
+    sensor_msgs std_msgs tf2_ros unitree_go)
   if(TARGET b2_sdk_driver)
     find_package(ament_cmake_gtest REQUIRED)
-    ament_add_gtest(test_sdk_safety test/test_sdk_safety.cpp TIMEOUT 30)
-    ament_target_dependencies(test_sdk_safety b2_interface geometry_msgs nav_msgs rclcpp
+    ament_add_gtest(test_sdk_safety test/test_sdk_safety.cpp TIMEOUT 60
+      ENV "ROS_DOMAIN_ID=154" "RMW_IMPLEMENTATION=rmw_cyclonedds_cpp"
+        "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST" "CYCLONEDDS_URI=${B2_TEST_LOOPBACK_DDS}")
+    ament_target_dependencies(test_sdk_safety b2_interface diagnostic_msgs geometry_msgs nav_msgs rclcpp
       sensor_msgs std_msgs std_srvs tf2_ros)
     target_link_libraries(test_sdk_safety unitree_sdk2)
-    set_tests_properties(test_sdk_safety PROPERTIES RUN_SERIAL TRUE
-      ENVIRONMENT "ROS_DOMAIN_ID=154;RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST;CYCLONEDDS_URI=<CycloneDDS><Domain><General><Interfaces><NetworkInterface name=\"lo\"/></Interfaces><AllowMulticast>false</AllowMulticast></General><Discovery><Peers><Peer address=\"localhost\"/></Peers></Discovery></Domain></CycloneDDS>")
+    set_tests_properties(test_sdk_safety PROPERTIES RUN_SERIAL TRUE)
+    # Exercise the hardware launch's ROS RMW as well as the legacy Cyclone path.
+    # Both fixtures keep native SDK traffic on loopback; no robot is contacted.
+    ament_add_gtest_test(test_sdk_safety TEST_NAME test_sdk_safety_fastrtps TIMEOUT 60
+      ENV "ROS_DOMAIN_ID=174" "RMW_IMPLEMENTATION=rmw_fastrtps_cpp"
+        "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST")
+    set_tests_properties(test_sdk_safety_fastrtps PROPERTIES RUN_SERIAL TRUE)
+    add_executable(benchmark_state_messages test/benchmark_state_messages.cpp)
+    target_include_directories(benchmark_state_messages PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    ament_target_dependencies(benchmark_state_messages geometry_msgs nav_msgs sensor_msgs std_msgs)
+    target_link_libraries(benchmark_state_messages unitree_sdk2)
   endif()
   add_executable(test_velocity_limits test/test_velocity_limits.cpp)
   target_include_directories(test_velocity_limits PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME velocity_limits COMMAND test_velocity_limits)
+  # Check production and test sources separately so Google Test macros use
+  # cppcheck's library model without excluding tests from static analysis.
+  find_package(ament_cmake_cppcheck REQUIRED)
+  set(ament_cmake_cppcheck_ADDITIONAL_EXCLUDE "test/*")
+  ament_cppcheck(TESTNAME cppcheck_tests test LIBRARIES googletest)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()
 
 ament_package()
+
+# Lint hooks create their tests inside ament_package(), not while dependencies
+# are discovered. Set this afterward so analysis is executed rather than skipped.
+if(BUILD_TESTING)
+  set_tests_properties(cppcheck cppcheck_tests PROPERTIES
+    ENVIRONMENT "AMENT_CPPCHECK_ALLOW_SLOW_VERSIONS=1")
+endif()

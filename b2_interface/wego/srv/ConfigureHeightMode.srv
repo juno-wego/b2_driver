@@ -1,0 +1,12 @@
+# Copyright (c) 2026 WeGo Robotics. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Wego-Proprietary
+
+# Raw B2 SDK switches. Firmware behavior must be verified before enabling.
+uint8 FREE_HEIGHT=0
+uint8 GAIT_HEIGHT=1
+uint8 feature
+bool enabled
+---
+bool success
+int32 result_code
+string message

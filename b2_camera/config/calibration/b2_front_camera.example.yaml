@@ -1,0 +1,23 @@
+# Front camera output layout only; all nulls require on-robot calibration.
+# Save measured results as b2_front_camera.yaml outside the source archive.
+# The corners reference is separately stored in b2_front_1920x1080.yaml.
+image_width: 1920
+image_height: 1080
+camera_name: b2_front_camera
+distortion_model: equidistant
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [null, null, null, null, null, null, null, null, null]
+distortion_coefficients:
+  rows: 1
+  cols: 4
+  data: [null, null, null, null]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [null, null, null, null, null, null, null, null, null]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [null, null, null, null, null, null, null, null, null, null, null, null]

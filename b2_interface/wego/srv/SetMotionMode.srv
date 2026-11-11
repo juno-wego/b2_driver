@@ -1,3 +1,6 @@
+# Copyright (c) 2026 WeGo Robotics. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Wego-Proprietary
+
 # B2-specific motion mode selection. cmd_vel remains the velocity input.
 uint8 DAMP=0
 uint8 BALANCE_STAND=1

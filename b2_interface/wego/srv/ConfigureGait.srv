@@ -1,0 +1,16 @@
+# Copyright (c) 2026 WeGo Robotics. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Wego-Proprietary
+
+uint8 SWITCH_GAIT=0
+uint8 CONTINUOUS_GAIT=1
+uint8 FAST_WALK=2
+uint8 AUTO_RECOVERY=3
+uint8 feature
+# Used by SWITCH_GAIT. Only configured, firmware-verified IDs are accepted.
+int32 gait_id
+# Used by the other features. No setting is sent automatically at startup.
+bool enabled
+---
+bool success
+int32 result_code
+string message

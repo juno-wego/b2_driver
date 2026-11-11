@@ -26,3 +26,5 @@ rosbag2_*/
 # identical duplicates of each other (163 MB each); see README if that ever
 # needs trimming.  Listing them here would do nothing, since .gitignore does
 # not affect files git already tracks.
+# Calibration image datasets are local; measured front/back YAML stays reviewable.
+b2_camera/config/calibration/datasets/

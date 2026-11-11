@@ -1,0 +1,2 @@
+# Needed by the pinned official camera_calibration 5.0.13 backend.
+semver==3.0.4

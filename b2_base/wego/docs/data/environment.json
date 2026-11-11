@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-12",
+  "kernel": "6.8.0-147-generic",
+  "architecture": "x86_64",
+  "compiler": "c++ (Ubuntu 11.5.0-1ubuntu1~24.04.1) 11.5.0",
+  "build_type": "Release",
+  "samples_per_run": 200,
+  "updates_per_batch": 1000,
+  "warmup_batches": 20,
+  "runs": 3,
+  "scope": "message construction/update only; no ROS graph, DDS or SDK commands"
+}

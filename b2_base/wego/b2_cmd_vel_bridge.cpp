@@ -1,3 +1,6 @@
+// Copyright (c) 2026 WeGo Robotics. All rights reserved.
+// SPDX-License-Identifier: LicenseRef-Wego-Proprietary
+
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -7,6 +10,7 @@
 #include <nlohmann/json.hpp>
 
 #include "velocity_limits.hpp"
+#include "driver_parameters.hpp"
 
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -40,23 +44,27 @@ public:
   B2CmdVelBridge()
   : Node("b2_cmd_vel_bridge")
   {
-    cmd_vel_topic_ = declare_parameter<std::string>("cmd_vel_topic", "/cmd_vel");
-    request_topic_ = declare_parameter<std::string>("request_topic", "/api/sport/request");
-    max_linear_x_ = declare_parameter<double>("max_linear_x", 1.0);
-    max_reverse_linear_x_ = declare_parameter<double>("max_reverse_linear_x", 0.8);
-    max_linear_y_ = declare_parameter<double>("max_linear_y", 0.4);
-    max_angular_z_ = declare_parameter<double>("max_angular_z", 1.2);
-    deadband_ = declare_parameter<double>("deadband", 0.01);
-    command_rate_hz_ = declare_parameter<double>("command_rate_hz", 20.0);
-    cmd_timeout_ = declare_parameter<double>("cmd_timeout", 0.5);
-    stop_on_timeout_ = declare_parameter<bool>("stop_on_timeout", true);
-    auto_balance_stand_ = declare_parameter<bool>("auto_balance_stand_on_start", false);
+    cmd_vel_topic_ = b2_base::startup_parameter<std::string>(*this, "cmd_vel_topic", "/cmd_vel");
+    request_topic_ = b2_base::startup_parameter<std::string>(*this, "request_topic",
+      "/api/sport/request");
+    max_linear_x_ = b2_base::startup_parameter<double>(*this, "max_linear_x", 1.0);
+    max_reverse_linear_x_ = b2_base::startup_parameter<double>(*this, "max_reverse_linear_x", 0.8);
+    max_linear_y_ = b2_base::startup_parameter<double>(*this, "max_linear_y", 0.4);
+    max_angular_z_ = b2_base::startup_parameter<double>(*this, "max_angular_z", 1.2);
+    deadband_ = b2_base::startup_parameter<double>(*this, "deadband", 0.01);
+    command_rate_hz_ = b2_base::startup_parameter<double>(*this, "command_rate_hz", 20.0);
+    cmd_timeout_ = b2_base::startup_parameter<double>(*this, "cmd_timeout", 0.5);
+    stop_on_timeout_ = b2_base::startup_parameter<bool>(*this, "stop_on_timeout", true);
+    auto_balance_stand_ = b2_base::startup_parameter<bool>(*this, "auto_balance_stand_on_start",
+      false);
+    b2_base::validate_motion_parameters(max_linear_x_, max_reverse_linear_x_, max_linear_y_,
+      max_angular_z_, deadband_, command_rate_hz_, cmd_timeout_);
 
     request_pub_ = create_publisher<unitree_api::msg::Request>(request_topic_, rclcpp::QoS(10));
     cmd_sub_ = create_subscription<geometry_msgs::msg::Twist>(
       cmd_vel_topic_, rclcpp::QoS(10),
       [this](geometry_msgs::msg::Twist::SharedPtr msg) {
-        last_cmd_ = *msg;
+        last_cmd_ = b2_base::finite_twist(*msg) ? *msg : geometry_msgs::msg::Twist{};
         last_cmd_time_ = now();
         have_cmd_ = true;
       });
@@ -73,9 +81,9 @@ public:
 
     if (auto_balance_stand_) {
       startup_timer_ = create_wall_timer(std::chrono::milliseconds(500), [this]() {
-        publish_motion_request(kApiBalanceStand);
-        startup_timer_->cancel();
-        RCLCPP_INFO(get_logger(), "Sent BalanceStand request to B2.");
+            publish_motion_request(kApiBalanceStand);
+            startup_timer_->cancel();
+            RCLCPP_INFO(get_logger(), "Sent BalanceStand request to B2.");
       });
     }
 
@@ -89,12 +97,12 @@ private:
   {
     services_.push_back(create_service<std_srvs::srv::Trigger>(
       name,
-      [this, api_id, name](
-        const std_srvs::srv::Trigger::Request::SharedPtr,
-        std_srvs::srv::Trigger::Response::SharedPtr response) {
-        publish_motion_request(api_id);
-        response->success = true;
-        response->message = "Published B2 sport request: " + name;
+        [this, api_id, name](
+          const std_srvs::srv::Trigger::Request::SharedPtr,
+          std_srvs::srv::Trigger::Response::SharedPtr response) {
+          publish_motion_request(api_id);
+          response->success = true;
+          response->message = "Published B2 sport request: " + name;
       }));
   }
 

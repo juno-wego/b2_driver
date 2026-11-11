@@ -1,0 +1,11 @@
+# Copyright (c) 2026 WeGo Robotics. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Wego-Proprietary
+
+# Body attitude in radians, passed to SDK Euler. Not a navigation heading goal.
+float64 roll
+float64 pitch
+float64 yaw
+---
+bool success
+int32 result_code
+string message

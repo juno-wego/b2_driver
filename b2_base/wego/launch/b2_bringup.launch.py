@@ -1,17 +1,22 @@
+# Copyright (c) 2026 WeGo Robotics. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Wego-Proprietary
+
 from pathlib import Path
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, SetEnvironmentVariable
+from launch.actions import (
+    DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, SetEnvironmentVariable)
 from launch.conditions import IfCondition, LaunchConfigurationEquals
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
 def _launch_setup(context, *_args, **_kwargs):
-    network_interface = LaunchConfiguration("network_interface").perform(context).strip()
-    params_file = Path(LaunchConfiguration("params_file").perform(context))
+    network_interface = LaunchConfiguration('network_interface').perform(context).strip()
+    params_file = Path(LaunchConfiguration('params_file').perform(context))
 
     if not params_file.exists():
         raise FileNotFoundError(params_file)
@@ -25,16 +30,17 @@ def _launch_setup(context, *_args, **_kwargs):
                 # messages directly.  The SDK2 node must not use this RMW:
                 # SDK2 creates its own Cyclone participant in the same process.
                 SetEnvironmentVariable(
-                    "RMW_IMPLEMENTATION",
-                    "rmw_cyclonedds_cpp",
-                    condition=LaunchConfigurationEquals("transport", "ros_bridge"),
+                    'RMW_IMPLEMENTATION',
+                    'rmw_cyclonedds_cpp',
+                    condition=LaunchConfigurationEquals('transport', 'ros_bridge'),
                 ),
                 SetEnvironmentVariable(
-                    "CYCLONEDDS_URI",
-                    "<CycloneDDS><Domain><General><Interfaces>"
-                    f'<NetworkInterface name="{network_interface}" priority="default" multicast="default" />'
-                    "</Interfaces></General></Domain></CycloneDDS>",
-                    condition=LaunchConfigurationEquals("transport", "ros_bridge"),
+                    'CYCLONEDDS_URI',
+                    '<CycloneDDS><Domain><General><Interfaces>'
+                    f'<NetworkInterface name="{network_interface}" '
+                    'priority="default" multicast="default" />'
+                    '</Interfaces></General></Domain></CycloneDDS>',
+                    condition=LaunchConfigurationEquals('transport', 'ros_bridge'),
                 ),
             ]
         )
@@ -43,9 +49,9 @@ def _launch_setup(context, *_args, **_kwargs):
     # ROS graph participant separate so both can coexist inside this process.
     actions.append(
         SetEnvironmentVariable(
-            "RMW_IMPLEMENTATION",
-            "rmw_fastrtps_cpp",
-            condition=LaunchConfigurationEquals("transport", "sdk"),
+            'RMW_IMPLEMENTATION',
+            'rmw_fastrtps_cpp',
+            condition=LaunchConfigurationEquals('transport', 'sdk'),
         )
     )
 
@@ -53,30 +59,31 @@ def _launch_setup(context, *_args, **_kwargs):
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution(
-                    [FindPackageShare("b2_driver_description"), "launch", "b2_description.launch.py"]
+                    [FindPackageShare('b2_driver_description'),
+                     'launch', 'b2_description.launch.py']
                 )
             ),
             launch_arguments={
-                "description_file": LaunchConfiguration("description_file"),
-                "rviz_config": LaunchConfiguration("rviz_config"),
-                "start_rviz": LaunchConfiguration("start_rviz"),
-                "use_sim_time": LaunchConfiguration("use_sim_time"),
+                'description_file': LaunchConfiguration('description_file'),
+                'rviz_config': LaunchConfiguration('rviz_config'),
+                'start_rviz': LaunchConfiguration('start_rviz'),
+                'use_sim_time': LaunchConfiguration('use_sim_time'),
             }.items(),
-            condition=IfCondition(LaunchConfiguration("enable_description")),
+            condition=IfCondition(LaunchConfiguration('enable_description')),
         )
     )
 
     actions.append(
         Node(
-            package="b2_base",
-            executable="b2_cmd_vel_bridge",
-            name="b2_cmd_vel_bridge",
-            output="screen",
-            parameters=[str(params_file), {"use_sim_time": LaunchConfiguration("use_sim_time")}],
+            package='b2_base',
+            executable='b2_cmd_vel_bridge',
+            name='b2_cmd_vel_bridge',
+            output='screen',
+            parameters=[str(params_file), {'use_sim_time': LaunchConfiguration('use_sim_time')}],
             condition=IfCondition(
                 PythonExpression([
-                    "'", LaunchConfiguration("transport"), "' == 'ros_bridge' and '",
-                    LaunchConfiguration("enable_control"), "' == 'true'",
+                    "'", LaunchConfiguration('transport'), "' == 'ros_bridge' and '",
+                    LaunchConfiguration('enable_control'), "' == 'true'",
                 ])
             ),
         )
@@ -84,15 +91,15 @@ def _launch_setup(context, *_args, **_kwargs):
 
     actions.append(
         Node(
-            package="b2_base",
-            executable="b2_state_bridge",
-            name="b2_state_bridge",
-            output="screen",
-            parameters=[str(params_file), {"use_sim_time": LaunchConfiguration("use_sim_time")}],
+            package='b2_base',
+            executable='b2_state_bridge',
+            name='b2_state_bridge',
+            output='screen',
+            parameters=[str(params_file), {'use_sim_time': LaunchConfiguration('use_sim_time')}],
             condition=IfCondition(
                 PythonExpression([
-                    "'", LaunchConfiguration("transport"), "' == 'ros_bridge' and '",
-                    LaunchConfiguration("enable_bridge"), "' == 'true'",
+                    "'", LaunchConfiguration('transport'), "' == 'ros_bridge' and '",
+                    LaunchConfiguration('enable_bridge'), "' == 'true'",
                 ])
             ),
         )
@@ -103,18 +110,20 @@ def _launch_setup(context, *_args, **_kwargs):
     # compatibility and diagnostic work, but never runs concurrently with SDK2.
     actions.append(
         Node(
-            package="b2_base",
-            executable="b2_sdk_driver",
-            name="b2_sdk_driver",
-            output="screen",
+            package='b2_base',
+            executable='b2_sdk_driver',
+            name='b2_sdk_driver',
+            output='screen',
             parameters=[
                 str(params_file),
                 {
-                    "network_interface": network_interface,
-                    "use_sim_time": LaunchConfiguration("use_sim_time"),
+                    'network_interface': network_interface,
+                    'enable_control': ParameterValue(
+                        LaunchConfiguration('enable_control'), value_type=bool),
+                    'use_sim_time': LaunchConfiguration('use_sim_time'),
                 },
             ],
-            condition=LaunchConfigurationEquals("transport", "sdk"),
+            condition=LaunchConfigurationEquals('transport', 'sdk'),
         )
     )
 
@@ -123,32 +132,34 @@ def _launch_setup(context, *_args, **_kwargs):
 
 def generate_launch_description():
     default_params = PathJoinSubstitution(
-        [FindPackageShare("b2_base"), "config", "b2_driver_params.yaml"]
+        [FindPackageShare('b2_base'), 'config', 'b2_driver_params.yaml']
     )
     default_description = PathJoinSubstitution(
-        [FindPackageShare("b2_driver_description"), "urdf", "b2_description.urdf"]
+        [FindPackageShare('b2_driver_description'), 'urdf', 'b2_description.urdf']
     )
     default_rviz = PathJoinSubstitution(
-        [FindPackageShare("b2_driver_description"), "launch", "check_joint.rviz"]
+        [FindPackageShare('b2_driver_description'), 'launch', 'check_joint.rviz']
     )
 
     return LaunchDescription(
         [
-            DeclareLaunchArgument("params_file", default_value=default_params),
-            DeclareLaunchArgument("description_file", default_value=default_description),
-            DeclareLaunchArgument("rviz_config", default_value=default_rviz),
-            DeclareLaunchArgument("network_interface", default_value=""),
+            DeclareLaunchArgument('params_file', default_value=default_params),
+            DeclareLaunchArgument('description_file', default_value=default_description),
+            DeclareLaunchArgument('rviz_config', default_value=default_rviz),
+            DeclareLaunchArgument('network_interface', default_value=''),
             DeclareLaunchArgument(
-                "transport",
-                default_value="sdk",
-                choices=["sdk", "ros_bridge"],
-                description="sdk uses Unitree SDK2 directly; ros_bridge uses the legacy ROS/DDS bridge.",
+                'transport',
+                default_value='sdk',
+                choices=['sdk', 'ros_bridge'],
+                description='sdk uses Unitree SDK2 directly; '
+                            'ros_bridge uses the legacy ROS/DDS bridge.',
             ),
-            DeclareLaunchArgument("start_rviz", default_value="false"),
-            DeclareLaunchArgument("enable_control", default_value="true"),
-            DeclareLaunchArgument("enable_bridge", default_value="true"),
-            DeclareLaunchArgument("enable_description", default_value="true"),
-            DeclareLaunchArgument("use_sim_time", default_value="false"),
+            DeclareLaunchArgument('start_rviz', default_value='false'),
+            DeclareLaunchArgument(
+                'enable_control', default_value='true', choices=['true', 'false']),
+            DeclareLaunchArgument('enable_bridge', default_value='true'),
+            DeclareLaunchArgument('enable_description', default_value='true'),
+            DeclareLaunchArgument('use_sim_time', default_value='false'),
             OpaqueFunction(function=_launch_setup),
         ]
     )
