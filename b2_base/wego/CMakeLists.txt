@@ -112,6 +112,7 @@ if(BUILD_TESTING)
   set(ament_cmake_copyright_FOUND TRUE)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(copyright test/test_source_headers.py)
+  ament_add_pytest_test(test_camera_entrypoints test/test_camera_entrypoints.py TIMEOUT 30)
   string(CONCAT B2_TEST_LOOPBACK_DDS
     "<CycloneDDS><Domain><General><Interfaces>"
     "<NetworkInterface name=\"lo\"/></Interfaces><AllowMulticast>false</AllowMulticast>"
